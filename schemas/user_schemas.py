@@ -1,6 +1,9 @@
 from pydantic import BaseModel, EmailStr, validator, Field, ConfigDict
 from datetime import date
 from typing import Optional, List
+from sqlalchemy.orm import Session
+from core.database import get_db
+from core.config import User
 
 class UserBase(BaseModel):
     username: str
@@ -19,10 +22,24 @@ class UserCreateRequest(UserBase):
             raise ValueError('Пароли не совпадают')
         return v
 
+    @validator('email')
+    def validate_email(cls, v):
+        db = next(get_db())
+        if db.query(User).filter(User.email == v).first():
+            raise ValueError('Пользователь с таким email уже зарегистрирован')
+        return v
+
     @validator('birth_date')
     def validate_birth_date(cls, v):
         if v > date.today():
             raise ValueError('Дата рождения не может быть в будущем')
+        
+        # Calculate age
+        today = date.today()
+        age = today.year - v.year - ((today.month, today.day) < (v.month, v.day))
+        
+        if age < 18:
+            raise ValueError('Пользователь должен быть старше 18 лет')
         return v
 
 class UserUpdateRequest(BaseModel):
